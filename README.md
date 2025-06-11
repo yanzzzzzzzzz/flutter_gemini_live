@@ -23,7 +23,13 @@ Add the package to your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  gemini_live: ^0.0.1 # Use the latest version
+  gemini_live: ^0.0.2 # Use the latest version
+```
+
+or
+
+```bash
+flutter pub add gemini_live
 ```
 
 Install the package from your terminal:
