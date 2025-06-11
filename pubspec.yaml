@@ -1,7 +1,7 @@
 name: gemini_live
 description: "A new Gemini Live API Flutter package project."
 version: 0.0.1
-homepage:
+homepage: https://github.com/JAICHANGPARK/flutter_gemini_live
 
 environment:
   sdk: ^3.8.1
