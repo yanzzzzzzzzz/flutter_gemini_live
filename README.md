@@ -1,5 +1,5 @@
 
-# [Flutter Gemini Live] 
+# Flutter Gemini Live 
 
 [![pub version](https://img.shields.io/pub/v/gemini_live.svg)](https://pub.dev/packages/[gemini_live])
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
