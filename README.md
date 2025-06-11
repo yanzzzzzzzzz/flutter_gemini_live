@@ -5,8 +5,6 @@
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 ![Platform](https://img.shields.io/badge/platform-flutter%20%7C%20android%20%7C%20ios%20%7C%20web%20%7C%20macos%20%7C%20windows%20%7C%20linux-blue)
 
-A Flutter widget that effortlessly brings Google Gemini's real-time text streaming to your app. It allows you to create a live, "typing-style" response from the Gemini API (`generateContentStream`) with minimal code.
-
 ---
 
 ## ✨ Features
