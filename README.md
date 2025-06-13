@@ -6,11 +6,11 @@
 
 ---
 
-https://github.com/user-attachments/assets/7d826f37-196e-4ddd-8828-df66db252e8e
-
-
 A Flutter package for using [the experimental Gemini Live API](https://ai.google.dev/gemini-api/docs/live), enabling real-time, multimodal conversations with Google's Gemini models.
 no Firebase dependency and support for the gemini-2.0-flash-live-001 model.
+
+https://github.com/user-attachments/assets/7d826f37-196e-4ddd-8828-df66db252e8e
+
 
 ## ✨ Features
 
@@ -18,6 +18,11 @@ no Firebase dependency and support for the gemini-2.0-flash-live-001 model.
 *   **Multimodal Input**: Send text, images, and audio in a single conversational turn.
 *   **Streaming Responses**: Receive text responses from the model as they are being generated.
 *   **Easy-to-use Callbacks**: Simple event-based handlers for `onOpen`, `onMessage`, `onError`, and `onClose`.
+
+| Demo 1: Chihuahua vs muffin | Demo 2: Labradoodle vs fried chicken |
+| :---: | :---: |
+| <img src="https://github.com/JAICHANGPARK/flutter_gemini_live/blob/main/imgs/Screenshot_20250613_222333.png?raw=true" alt="실시간 대화 데모" width="400"/> | <img src="https://github.com/JAICHANGPARK/flutter_gemini_live/blob/main/imgs/Screenshot_20250613_222355.png?raw=true" alt="멀티모달 입력 데모" width="400"/> |
+| *Chihuahua vs muffin* | *Labradoodle vs fried chicken* |
 
 ## 🏁 Getting Started
 
