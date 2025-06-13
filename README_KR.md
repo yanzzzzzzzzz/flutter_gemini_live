@@ -9,6 +9,7 @@
 - Google의 Gemini 모델과 실시간, 멀티모달 대화를 가능하게 해주는 [실험적인 Gemini Live API](https://ai.google.dev/gemini-api/docs/live)를 사용하기 위한 Flutter 패키지입니다.
 - 이 패키지는 Firebase / Firebase AI Logic 사용 없이 활용가능 합니다.
 - 그리고 `gemini-2.0-flash-live-001` 모델을 지원합니다.
+- response_modalities : TEXT, AUDIO 모두 지원 
 
 https://github.com/user-attachments/assets/7d826f37-196e-4ddd-8828-df66db252e8e
 
