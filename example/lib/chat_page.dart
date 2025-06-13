@@ -7,15 +7,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:gemini_live/gemini_live.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'bubble.dart';
-import 'main.dart';
-import 'message.dart';
-import 'package:record/record.dart';
+// Importing custom widgets and data models from the project.
+import 'bubble.dart'; // A widget to display a single chat message bubble.
+import 'main.dart'; // Contains global variables like the API key.
+import 'message.dart'; // The data class for a chat message (ChatMessage).
+import 'package:record/record.dart'; // Package for recording audio.
 
+/// Enum to manage the state of the WebSocket connection to the Gemini API.
 enum ConnectionStatus { connecting, connected, disconnected }
 
+/// Enum to define the desired response modality from the model.
 enum ResponseMode { text, audio }
 
+/// The main chat page widget.
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
 
@@ -24,29 +28,31 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatPage> {
-  late final GoogleGenAI _genAI;
-  LiveSession? _session;
-  final TextEditingController _textController = TextEditingController();
+  // --- Gemini Live API and Session Management ---
+  late final GoogleGenAI _genAI; // The main instance for interacting with the Gemini API.
+  LiveSession? _session; // The active WebSocket session for real-time communication.
+  final TextEditingController _textController = TextEditingController(); // Controller for the text input field.
 
-  // 상태 관리 변수
-  ConnectionStatus _connectionStatus = ConnectionStatus.disconnected;
-  bool _isReplying = false;
-  final List<ChatMessage> _messages = [];
-  ChatMessage? _streamingMessage; // 스트리밍 중인 메시지를 별도로 관리
-  String _statusText = "연결을 초기화합니다...";
+  // --- State Management Variables ---
+  ConnectionStatus _connectionStatus = ConnectionStatus.disconnected; // Tracks the current connection status.
+  bool _isReplying = false; // A flag to indicate if the model is currently generating a response.
+  final List<ChatMessage> _messages = []; // A list to store the history of chat messages.
+  ChatMessage? _streamingMessage; // A separate message object to hold the response as it streams in.
+  String _statusText = "Initializing connection..."; // A user-facing string to show the current status.
 
-  // 이미지 및 오디오 관련 변수
-  XFile? _pickedImage;
-  final ImagePicker _picker = ImagePicker();
-  StreamSubscription<RecordState>? _recordSub;
-  bool _isRecording = false;
+  // --- Image and Audio Handling Variables ---
+  XFile? _pickedImage; // Holds the image file selected by the user.
+  final ImagePicker _picker = ImagePicker(); // An instance of the image picker utility.
+  StreamSubscription<RecordState>? _recordSub; // Subscription to listen to the audio recorder's state changes.
+  bool _isRecording = false; // A flag to track if audio is currently being recorded.
 
-  // --- 오디오 및 모드 관리 ---
-  final AudioRecorder _audioRecorder = AudioRecorder();
-  StreamSubscription<List<int>>? _audioStreamSubscription;
-  ResponseMode _responseMode = ResponseMode.text; // 기본 응답 모드
-  final StringBuffer _audioBuffer = StringBuffer();
+  // --- Audio and Mode Management ---
+  final AudioRecorder _audioRecorder = AudioRecorder(); // The main object for handling audio recording.
+  StreamSubscription<List<int>>? _audioStreamSubscription; // Subscription for an audio stream (not used in this implementation but good practice to have).
+  ResponseMode _responseMode = ResponseMode.text; // The default response mode is text.
+  final StringBuffer _audioBuffer = StringBuffer(); // A buffer for audio data (not used in this implementation).
 
+  /// Initializes the connection to the Gemini Live API when the widget is first created.
   Future<void> _initialize() async {
     await _connectToLiveAPI();
   }
@@ -54,8 +60,11 @@ class _ChatScreenState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+    // Initialize the GoogleGenAI instance with the API key.
     _genAI = GoogleGenAI(apiKey: geminiApiKey);
+    // Start the connection process.
     _initialize();
+    // Subscribe to the audio recorder's state to update the UI (e.g., change the mic icon).
     _recordSub = _audioRecorder.onStateChanged().listen((recordState) {
       if (mounted) {
         setState(() => _isRecording = recordState == RecordState.record);
@@ -65,44 +74,57 @@ class _ChatScreenState extends State<ChatPage> {
 
   @override
   void dispose() {
-    _session?.close();
-    _audioStreamSubscription?.cancel();
-    _audioRecorder.dispose();
+    // It's crucial to clean up resources to prevent memory leaks.
+    _session?.close(); // Close the WebSocket connection.
+    _audioStreamSubscription?.cancel(); // Cancel any active stream subscriptions.
+    _audioRecorder.dispose(); // Dispose of the audio recorder.
+    _textController.dispose(); // Dispose of the text controller.
     super.dispose();
   }
 
+  /// A helper function to safely update the status text on the UI.
   void _updateStatus(String text) {
     if (mounted) setState(() => _statusText = text);
   }
 
-  // --- 연결 관리 ---
+  // --- Connection Management ---
+  /// Establishes a WebSocket connection to the Gemini Live API.
   Future<void> _connectToLiveAPI() async {
+    // Prevent multiple connection attempts if one is already in progress.
     if (_connectionStatus == ConnectionStatus.connecting) return;
 
-    // 이전 세션이 있다면 안전하게 종료
+    // Safely close any pre-existing session before creating a new one.
     await _session?.close();
     setState(() {
       _session = null;
       _connectionStatus = ConnectionStatus.connecting;
-      _messages.clear();
+      _messages.clear(); // Clear previous chat history.
+      // Add a temporary message to inform the user about the connection attempt.
       _addMessage(
         ChatMessage(
-          text: "Gemini Live API에 연결 중 (${_responseMode.name} 모드)...",
+          text: "Connecting to Gemini Live API (${_responseMode.name} mode)...",
           author: Role.model,
         ),
       );
-      _updateStatus("Gemini Live API에 연결 중...");
+      _updateStatus("Connecting to Gemini Live API...");
     });
 
     try {
+      final modelName =  'gemini-2.0-flash-live-001';
+      // Initiate the connection with specified parameters.
       final session = await _genAI.live.connect(
         LiveConnectParameters(
-          model: 'gemini-2.0-flash-live-001',
+          // Specify the model to use. 'flash' is optimized for speed.
+          model: modelName,
+          // Configure the generation output.
           config: GenerationConfig(
+            // Define the expected response format (modality).
+            // This is dynamically set based on the _responseMode state.
             responseModalities: _responseMode == ResponseMode.audio
                 ? [Modality.AUDIO]
                 : [Modality.TEXT],
           ),
+          // Provide system instructions to guide the model's behavior.
           systemInstruction: Content(
             parts: [
               Part(
@@ -113,59 +135,61 @@ class _ChatScreenState extends State<ChatPage> {
               ),
             ],
           ),
+          // Define callbacks to handle WebSocket events.
           callbacks: LiveCallbacks(
-            // onOpen: () => print('✅ WebSocket 연결 성공'),
-            onOpen: () => _updateStatus("연결 성공! 마이크와 비디오를 켜보세요."),
-            onMessage: _handleLiveAPIResponse,
+            onOpen: () => _updateStatus("Connection successful! Try turning on the mic."),
+            onMessage: _handleLiveAPIResponse, // Called when a message is received.
             onError: (error, stack) {
-              print('🚨 에러 발생: $error');
+              print('🚨 Error occurred: $error');
               if (mounted) {
-                setState(
-                  () => _connectionStatus = ConnectionStatus.disconnected,
-                );
+                setState(() => _connectionStatus = ConnectionStatus.disconnected);
               }
             },
             onClose: (code, reason) {
-              print('🚪 연결 종료: $code, $reason');
+              print('🚪 Connection closed: $code, $reason');
               if (mounted) {
-                setState(
-                  () => _connectionStatus = ConnectionStatus.disconnected,
-                );
+                setState(() => _connectionStatus = ConnectionStatus.disconnected);
               }
             },
           ),
         ),
       );
 
+      // If the connection is successful, update the state.
       if (mounted) {
         setState(() {
           _session = session;
           _connectionStatus = ConnectionStatus.connected;
-          _messages.removeLast(); // "연결 중..." 메시지 제거
+          _messages.removeLast(); // Remove the "Connecting..." message.
+          // Add a welcome message.
           _addMessage(
-            ChatMessage(text: "안녕하세요! 마이크 버튼을 눌러 말씀해보세요.", author: Role.model),
+            ChatMessage(text: "Hello! Press the mic button to speak.", author: Role.model),
           );
         });
       }
     } catch (e) {
-      print("연결 실패: $e");
+      print("Connection failed: $e");
       if (mounted) {
         setState(() => _connectionStatus = ConnectionStatus.disconnected);
       }
     }
   }
 
-  // --- 메시지 처리 ---
+  // --- Message Handling ---
+  /// Handles incoming messages from the Gemini Live API.
   void _handleLiveAPIResponse(LiveServerMessage message) {
     if (!mounted) return;
 
     final textChunk = message.text;
-    print('📥 Received message textchunk: ${textChunk}');
+    print('📥 Received message textchunk: $textChunk');
+    // If a text chunk is received, update the streaming message.
     if (textChunk != null) {
       setState(() {
         if (_streamingMessage == null) {
+          // If this is the first chunk, create a new streaming message.
           _streamingMessage = ChatMessage(text: textChunk, author: Role.model);
         } else {
+          // Otherwise, append the new chunk to the existing message text.
           _streamingMessage = ChatMessage(
             text: _streamingMessage!.text + textChunk,
             author: Role.model,
@@ -174,17 +198,20 @@ class _ChatScreenState extends State<ChatPage> {
       });
     }
 
+    // When the model signals that its turn is complete, finalize the message.
     if (message.serverContent?.turnComplete ?? false) {
       setState(() {
         if (_streamingMessage != null) {
+          // Move the completed streaming message into the main message list.
           _messages.add(_streamingMessage!);
-          _streamingMessage = null;
+          _streamingMessage = null; // Clear the streaming message.
         }
-        _isReplying = false;
+        _isReplying = false; // Allow the user to send another message.
       });
     }
   }
 
+  /// A helper function to add a new message to the list and update the UI.
   void _addMessage(ChatMessage message) {
     if (!mounted) return;
     setState(() {
@@ -192,37 +219,36 @@ class _ChatScreenState extends State<ChatPage> {
     });
   }
 
-  // --- 멀티모달 입력 및 전송 ---
+  // --- Multimodal Input and Sending ---
+  /// Opens the image gallery for the user to pick an image.
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 70,
+      imageQuality: 70, // Compress image to reduce size.
     );
     if (image != null) {
       setState(() => _pickedImage = image);
     }
   }
 
-  // *** _toggleRecording 함수 수정 ***
+  /// Toggles audio recording on and off.
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      // --- 녹음 중지 로직 ---
+      // --- Stop Recording Logic ---
       final path = await _audioRecorder.stop();
-      setState(() => _isRecording = false); // UI 즉시 업데이트
+      setState(() => _isRecording = false); // Update UI immediately.
 
       if (path != null) {
-        print("녹음 중지. 파일 경로: $path");
+        print("Recording stopped. File path: $path");
 
-        // 1. 녹음된 파일을 바이트로 읽기
+        // 1. Read the recorded audio file as bytes.
         final file = File(path);
         final audioBytes = await file.readAsBytes();
 
-        // 2. 오디오 파일을 UI에 메시지로 표시
-        // 텍스트는 비워두고, 이미지 표시 로직처럼 오디오 아이콘을 표시할 수 있습니다.
-        // 여기서는 간단하게 텍스트로 표현합니다.
-        _addMessage(ChatMessage(text: "[사용자 음성 전송됨]", author: Role.user));
+        // 2. Display a message in the UI to confirm audio was sent.
+        _addMessage(ChatMessage(text: "[User audio sent]", author: Role.user));
 
-        // 3. 서버로 오디오 데이터 전송
+        // 3. Send the audio data to the server.
         if (_session != null) {
           setState(() => _isReplying = true);
 
@@ -234,63 +260,66 @@ class _ChatScreenState extends State<ChatPage> {
                     role: "user",
                     parts: [
                       Part(
+                        // The 'inlineData' field is used for sending binary data like images or audio.
                         inlineData: Blob(
-                          // Gemini API는 다양한 오디오 포맷을 지원합니다.
-                          // record 패키지의 기본 인코더에 맞춰 MIME 타입을 설정합니다.
-                          // 예: aacLc, pcm16bits, flac, opus, amrNb, amrWb
-                          mimeType: 'audio/wav', // RecordConfig에 따라 변경 필요
+                          // The MIME type must match the audio format.
+                          // The `record` package with `AudioEncoder.aacLc` produces 'audio/m4a'.
+                          // Adjust this if you use a different encoder (e.g., 'audio/wav' for pcm16bits).
+                          mimeType: 'audio/m4a',
+                          // The binary data must be Base64 encoded.
                           data: base64Encode(audioBytes),
                         ),
                       ),
                     ],
                   ),
                 ],
-                turnComplete: true,
+                turnComplete: true, // Signal that this is a complete user turn.
               ),
             ),
           );
         }
-
-        // 4. 임시 파일 삭제
+        // 4. Delete the temporary audio file to save space.
         await file.delete();
       }
     } else {
-      // --- 녹음 시작 로직 ---
+      // --- Start Recording Logic ---
+      // Request microphone permission before starting.
       if (await Permission.microphone.request().isGranted) {
         final tempDir = await getTemporaryDirectory();
-        final filePath =
-            '${tempDir.path}/temp_audio.m4a'; // 확장자를 .m4a (AAC) 등으로 변경
+        // Use a file extension that matches the encoder. .m4a is for AAC.
+        final filePath = '${tempDir.path}/temp_audio.m4a';
 
-        // MIME 타입과 일치하는 인코더 사용 (예: AAC)
+        // Start recording with a configuration that matches the MIME type.
         await _audioRecorder.start(
           const RecordConfig(encoder: AudioEncoder.aacLc),
           path: filePath,
         );
       } else {
-        print("마이크 권한이 거부되었습니다.");
+        print("Microphone permission was denied.");
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text("마이크 권한이 필요합니다.")));
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Microphone permission is required.")));
         }
       }
     }
   }
 
+  /// Sends a text message and/or an image to the API.
   Future<void> _sendMessage() async {
     final text = _textController.text;
-    if ((text.isEmpty && _pickedImage == null) ||
-        _isReplying ||
-        _session == null)
+    // Do not send if the input is empty, the model is replying, or the session is not active.
+    if ((text.isEmpty && _pickedImage == null) || _isReplying || _session == null) {
       return;
+    }
 
-    // 사용자 메시지를 UI에 먼저 추가
+    // Add the user's message to the UI immediately for a responsive feel.
     _addMessage(
       ChatMessage(text: text, author: Role.user, image: _pickedImage),
     );
 
     setState(() => _isReplying = true);
 
+    // Prepare the parts of the message to be sent.
     final List<Part> parts = [];
     if (text.isNotEmpty) {
       parts.add(Part(text: text));
@@ -307,6 +336,7 @@ class _ChatScreenState extends State<ChatPage> {
       );
     }
 
+    // Send the message to the Gemini API.
     _session!.sendMessage(
       LiveClientMessage(
         clientContent: LiveClientContent(
@@ -316,16 +346,19 @@ class _ChatScreenState extends State<ChatPage> {
       ),
     );
 
+    // Clear the input fields after sending.
     _textController.clear();
     setState(() => _pickedImage = null);
   }
 
+  /// Builds the text input composer with buttons for image, audio, and sending.
   Widget _buildTextComposer() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
       color: Theme.of(context).cardColor,
       child: Column(
         children: [
+          // Show a preview of the picked image.
           if (_pickedImage != null)
             Container(
               height: 100,
@@ -345,6 +378,7 @@ class _ChatScreenState extends State<ChatPage> {
                     Positioned(
                       top: -4,
                       right: -4,
+                      // Button to remove the selected image.
                       child: IconButton(
                         icon: const Icon(
                           Icons.cancel,
@@ -362,30 +396,30 @@ class _ChatScreenState extends State<ChatPage> {
             ),
           Row(
             children: [
+              // Button to pick an image.
               IconButton(
                 icon: const Icon(Icons.image_outlined),
                 onPressed: _pickImage,
               ),
+              // Button to toggle audio recording.
               IconButton(
                 icon: Icon(
-                  _isRecording
-                      ? Icons.stop_circle_outlined
-                      : Icons.mic_none_outlined,
+                  _isRecording ? Icons.stop_circle_outlined : Icons.mic_none_outlined,
                 ),
-                color: _isRecording
-                    ? Colors.red
-                    : Theme.of(context).iconTheme.color,
+                color: _isRecording ? Colors.red : Theme.of(context).iconTheme.color,
                 onPressed: _toggleRecording,
               ),
+              // The main text input field.
               Expanded(
                 child: TextField(
                   controller: _textController,
                   onSubmitted: (_) => _sendMessage(),
                   decoration: const InputDecoration.collapsed(
-                    hintText: '메시지 또는 이미지 설명 입력',
+                    hintText: 'Enter a message or image description',
                   ),
                 ),
               ),
+              // Button to send the message.
               IconButton(
                 icon: const Icon(Icons.send),
                 onPressed: _sendMessage,
@@ -398,6 +432,8 @@ class _ChatScreenState extends State<ChatPage> {
     );
   }
 
+  /// Builds an alternative input area, primarily for voice input.
+  /// Note: This widget is not used in the current `build` method logic but is available.
   Widget _buildInputArea() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
@@ -407,14 +443,10 @@ class _ChatScreenState extends State<ChatPage> {
         children: [
           FloatingActionButton(
             onPressed: _toggleRecording,
-            backgroundColor: _isRecording
-                ? Colors.red.shade400
-                : Theme.of(context).colorScheme.secondaryContainer,
+            backgroundColor: _isRecording ? Colors.red.shade400 : Theme.of(context).colorScheme.secondaryContainer,
             child: Icon(
               _isRecording ? Icons.stop : Icons.mic,
-              color: _isRecording
-                  ? Colors.white
-                  : Theme.of(context).colorScheme.onSecondaryContainer,
+              color: _isRecording ? Colors.white : Theme.of(context).colorScheme.onSecondaryContainer,
               size: 32,
             ),
           ),
@@ -423,35 +455,38 @@ class _ChatScreenState extends State<ChatPage> {
     );
   }
 
-  // --- UI 위젯 빌더 ---
+  // --- UI Widget Builder ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gemini Live API'),
         actions: [
-          // *** 추가: 응답 모드 선택 메뉴 ***
+          // A menu to select the desired response mode (Text or Audio).
           PopupMenuButton<ResponseMode>(
             onSelected: (ResponseMode mode) {
               if (mode != _responseMode) {
                 setState(() => _responseMode = mode);
-                // 모드가 변경되면 재연결
+                // Reconnect to the API with the new mode setting.
                 _connectToLiveAPI();
               }
             },
-            itemBuilder: (BuildContext context) =>
-                <PopupMenuEntry<ResponseMode>>[
-                  const PopupMenuItem<ResponseMode>(
-                    value: ResponseMode.text,
-                    child: Text('텍스트 응답'),
-                  ),
-                ],
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<ResponseMode>>[
+              const PopupMenuItem<ResponseMode>(
+                value: ResponseMode.text,
+                child: Text('Text Response'),
+              ),
+              // Add this back if you implement audio response playback.
+              // const PopupMenuItem<ResponseMode>(
+              //   value: ResponseMode.audio,
+              //   child: Text('Audio Response'),
+              // ),
+            ],
             icon: Icon(
-              _responseMode == ResponseMode.text
-                  ? Icons.text_fields
-                  : Icons.graphic_eq,
+              _responseMode == ResponseMode.text ? Icons.text_fields : Icons.graphic_eq,
             ),
           ),
+          // A visual indicator for the connection status.
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: Icon(
@@ -470,34 +505,39 @@ class _ChatScreenState extends State<ChatPage> {
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
+            // The main chat area.
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.all(8.0),
-                reverse: true,
-                itemCount:
-                    _messages.length + (_streamingMessage == null ? 0 : 1),
+                reverse: true, // Shows the latest messages at the bottom.
+                // The item count includes the streaming message if it exists.
+                itemCount: _messages.length + (_streamingMessage == null ? 0 : 1),
                 itemBuilder: (context, index) {
+                  // If there's a streaming message, render it at the top (index 0).
                   if (_streamingMessage != null && index == 0) {
                     return Bubble(message: _streamingMessage!);
                   }
-                  final messageIndex =
-                      index - (_streamingMessage == null ? 0 : 1);
+                  // Adjust the index to access the main messages list.
+                  final messageIndex = index - (_streamingMessage == null ? 0 : 1);
                   final message = _messages.reversed.toList()[messageIndex];
                   return Bubble(message: message);
                 },
               ),
             ),
+            // Show a progress bar while the model is replying.
             if (_isReplying) const LinearProgressIndicator(),
             const Divider(height: 1.0),
+            // If disconnected, show a button to reconnect.
             if (_connectionStatus == ConnectionStatus.disconnected)
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.refresh),
-                  label: const Text("연결 재시도"),
+                  label: const Text("Reconnect"),
                   onPressed: _connectToLiveAPI,
                 ),
               ),
+            // If connected, show the message input composer.
             if (_connectionStatus == ConnectionStatus.connected)
               _buildTextComposer(),
           ],
