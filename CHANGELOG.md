@@ -1,3 +1,9 @@
+## 0.0.3
+
+- Add Example
+- Improve Web Support
+- Remove Platform.version (dartVersion)
+
 ## 0.0.2
 
 - Update README.md

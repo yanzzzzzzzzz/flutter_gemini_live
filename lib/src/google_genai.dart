@@ -20,8 +20,7 @@ class GoogleGenAI {
 
   GoogleGenAI({required this.apiKey, this.httpClient}) {
     _apiClient = ApiClient(apiKey: apiKey, httpClient: httpClient);
-    // *** 수정: LiveService 생성 시 dartVersion 전달 ***
-    live = LiveService(apiKey: apiKey, dartVersion: Platform.version);
+    live = LiveService(apiKey: apiKey);
   }
 
   void close() {

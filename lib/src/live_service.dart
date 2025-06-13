@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import './platform/web_socket_service_stub.dart'
+    if (dart.library.io) './platform/web_socket_service_io.dart'
+    if (dart.library.html) './platform/web_socket_service_web.dart'
+    as ws_connector;
 
 import 'model/models.dart';
 
@@ -39,13 +42,13 @@ class LiveService {
 
   // *** 추가: SDK 버전 및 User-Agent 정보 ***
   final String _sdkVersion = '1.0.0'; // Dart SDK의 자체 버전
-  final String _dartVersion; // Dart 런타임 버전
+  // final String _dartVersion; // Dart 런타임 버전
 
   LiveService({
     required this.apiKey,
     this.apiVersion = 'v1beta',
-    required String dartVersion,
-  }) : _dartVersion = dartVersion;
+    // required String dartVersion,
+  });
 
   // *** 수정된 부분: 데이터 처리 로직을 별도 함수로 분리 ***
   void _handleWebSocketData(dynamic data, LiveCallbacks callbacks) {
@@ -86,19 +89,13 @@ class LiveService {
     print('🔌 Connecting to WebSocket at $websocketUri');
 
     try {
-      // 1. WebSocket.connect를 사용하여 헤더와 함께 연결 시도
-      final webSocket = await WebSocket.connect(
-        websocketUri.toString(),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-          'x-goog-api-client': userAgent,
-          'user-agent': userAgent,
-        },
-      );
-
-      // 2. IOWebSocketChannel로 래핑
-      final channel = IOWebSocketChannel(webSocket);
+      final headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+        'x-goog-api-client': userAgent,
+        'user-agent': userAgent,
+      };
+      final channel = await ws_connector.connect(websocketUri, headers);
       final session = LiveSession._(channel);
       final setupCompleter = Completer<void>();
 
