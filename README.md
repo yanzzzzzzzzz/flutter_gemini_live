@@ -4,6 +4,8 @@
 [![License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 ![Platform](https://img.shields.io/badge/platform-flutter%20%7C%20android%20%7C%20ios%20%7C%20web%20%7C%20macos%20%7C%20windows%20%7C%20linux-blue)
 
+[[English]](https://github.com/JAICHANGPARK/flutter_gemini_live/blob/main/README.md) | [[한국어]](https://github.com/JAICHANGPARK/flutter_gemini_live/blob/main/README_KR.md)
+
 ---
 
 A Flutter package for using [the experimental Gemini Live API](https://ai.google.dev/gemini-api/docs/live), enabling real-time, multimodal conversations with Google's Gemini models.
@@ -36,10 +38,10 @@ Add the package to your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  gemini_live: ^0.0.3 # Use the latest version
+  gemini_live: ^0.0.5 # Use the latest version
 ```
 
-or run this command:
+or run this command(Recommend):
 
 ```bash
 flutter pub add gemini_live
