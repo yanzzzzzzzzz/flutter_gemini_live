@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/7d826f37-196e-4ddd-8828-df66db252e8e
 
 ```yaml
 dependencies:
-  gemini_live: ^0.0.5 # 최신 버전을 사용하세요
+  gemini_live: ^0.1.0 # 최신 버전을 사용하세요
 ```
 
 또는 아래 명령어를 실행하세요(추천):

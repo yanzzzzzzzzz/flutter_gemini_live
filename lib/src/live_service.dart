@@ -41,7 +41,7 @@ class LiveService {
   final String apiVersion;
 
   // *** 추가: SDK 버전 및 User-Agent 정보 ***
-  final String _sdkVersion = '1.0.0'; // Dart SDK의 자체 버전
+  // final String _sdkVersion = '1.0.0'; // Dart SDK의 자체 버전
   // final String _dartVersion; // Dart 런타임 버전
 
   LiveService({

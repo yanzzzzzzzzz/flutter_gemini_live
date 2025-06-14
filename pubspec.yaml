@@ -1,6 +1,6 @@
 name: gemini_live
-description: "A new Gemini Live API Flutter package project."
-version: 0.0.5
+description: "A Flutter package for using the experimental Gemini Live API, enabling real-time, multimodal conversations with Google's Gemini models."
+version: 0.1.0
 repository: https://github.com/JAICHANGPARK/flutter_gemini_live
 homepage: https://github.com/JAICHANGPARK/flutter_gemini_live
 

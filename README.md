@@ -40,7 +40,7 @@ Add the package to your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  gemini_live: ^0.0.5 # Use the latest version
+  gemini_live: ^0.1.0 # Use the latest version
 ```
 
 or run this command(Recommend):
