@@ -1,5 +1,3 @@
-// platform/web_socket_service_stub.dart
-
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 // 다른 파일들과 함수 시그니처를 통일합니다.
