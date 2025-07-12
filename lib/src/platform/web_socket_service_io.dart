@@ -1,5 +1,3 @@
-// platform/web_socket_service_io.dart
-
 import 'dart:io';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
