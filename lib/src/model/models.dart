@@ -221,6 +221,18 @@ class LiveServerMessage {
         .where((t) => t != null)
         .join('');
   }
+
+  String? get audio {
+    final audioParts = serverContent?.modelTurn?.parts
+        ?.where((p) => p.inlineData?.mimeType.startsWith('audio/') == true)
+        .toList();
+    
+    if (audioParts != null && audioParts.isNotEmpty) {
+      return audioParts.first.inlineData?.data;
+    }
+    
+    return null;
+  }
 }
 
 @JsonSerializable(

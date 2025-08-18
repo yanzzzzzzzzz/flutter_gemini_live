@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:gemini_live/gemini_live.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 // Importing custom widgets and data models from the project.
 import 'bubble.dart'; // A widget to display a single chat message bubble.
@@ -49,8 +50,11 @@ class _ChatScreenState extends State<ChatPage> {
   // --- Audio and Mode Management ---
   final AudioRecorder _audioRecorder = AudioRecorder(); // The main object for handling audio recording.
   StreamSubscription<List<int>>? _audioStreamSubscription; // Subscription for an audio stream (not used in this implementation but good practice to have).
-  ResponseMode _responseMode = ResponseMode.text; // The default response mode is text.
-  final StringBuffer _audioBuffer = StringBuffer(); // A buffer for audio data (not used in this implementation).
+  ResponseMode _responseMode = ResponseMode.audio; // The default response mode is audio.
+  final List<String> _audioDataChunks = []; // Buffer to accumulate base64 audio chunks
+  final AudioPlayer _audioPlayer = AudioPlayer(); // Audio player for playing responses.
+  bool _isPlayingAudio = false; // Flag to track if audio is currently playing.
+  bool _isAccumulatingAudio = false; // Flag to track if we're collecting audio chunks
 
   /// Initializes the connection to the Gemini Live API when the widget is first created.
   Future<void> _initialize() async {
@@ -78,6 +82,7 @@ class _ChatScreenState extends State<ChatPage> {
     _session?.close(); // Close the WebSocket connection.
     _audioStreamSubscription?.cancel(); // Cancel any active stream subscriptions.
     _audioRecorder.dispose(); // Dispose of the audio recorder.
+    _audioPlayer.dispose(); // Dispose of the audio player.
     _textController.dispose(); // Dispose of the text controller.
     super.dispose();
   }
@@ -111,6 +116,9 @@ class _ChatScreenState extends State<ChatPage> {
 
     try {
       final modelName =  'gemini-2.0-flash-live-001';
+      print('🔧 Current response mode: ${_responseMode.name}');
+      print('🔧 Response modalities will be: ${_responseMode == ResponseMode.audio ? "[AUDIO]" : "[TEXT]"}');
+      
       // Initiate the connection with specified parameters.
       final session = await _genAI.live.connect(
         LiveConnectParameters(
@@ -181,8 +189,12 @@ class _ChatScreenState extends State<ChatPage> {
     if (!mounted) return;
 
     final textChunk = message.text;
+    final audioChunk = message.audio;
+    
     print('📥 Received message textchunk: $textChunk');
-    // If a text chunk is received, update the streaming message.
+    print('📥 Received message audiochunk: ${audioChunk != null ? "Audio data received" : "No audio"}');
+    
+    // Handle text response
     if (textChunk != null) {
       setState(() {
         if (_streamingMessage == null) {
@@ -198,6 +210,20 @@ class _ChatScreenState extends State<ChatPage> {
       });
     }
 
+    // Handle audio response
+    if (audioChunk != null && _responseMode == ResponseMode.audio) {
+      print('🎵 Processing audio chunk with length: ${audioChunk.length}');
+      _accumulateAudioChunk(audioChunk);
+      
+      // Add a message to show that audio is being processed
+      if (_streamingMessage == null && !_isAccumulatingAudio) {
+        setState(() {
+          _streamingMessage = ChatMessage(text: "🔊 Processing audio response...", author: Role.model);
+          _isAccumulatingAudio = true;
+        });
+      }
+    }
+
     // When the model signals that its turn is complete, finalize the message.
     if (message.serverContent?.turnComplete ?? false) {
       setState(() {
@@ -207,8 +233,189 @@ class _ChatScreenState extends State<ChatPage> {
           _streamingMessage = null; // Clear the streaming message.
         }
         _isReplying = false; // Allow the user to send another message.
+        
+        // Play accumulated audio if any
+        if (_audioDataChunks.isNotEmpty) {
+          _playAccumulatedAudio();
+        }
+        _isAccumulatingAudio = false;
       });
     }
+  }
+
+  /// Accumulates audio chunks for later playback (following JS implementation pattern)
+  void _accumulateAudioChunk(String audioData) {
+    try {
+      // Store the base64 audio data chunks (like JS implementation)
+      _audioDataChunks.add(audioData);
+      print('🎵 Accumulated audio chunk ${_audioDataChunks.length}, data length: ${audioData.length}');
+    } catch (e) {
+      print('Error accumulating audio chunk: $e');
+    }
+  }
+
+  /// Plays all accumulated audio chunks as one continuous stream (JS-inspired implementation)
+  Future<void> _playAccumulatedAudio() async {
+    if (_audioDataChunks.isEmpty) return;
+    
+    try {
+      // Combine all audio data chunks like in the JS implementation
+      final List<int> combinedAudio = [];
+      
+      for (final audioData in _audioDataChunks) {
+        final buffer = base64Decode(audioData);
+        // Convert bytes to Int16Array equivalent (like JS implementation)
+        for (int i = 0; i < buffer.length - 1; i += 2) {
+          // Read as little-endian 16-bit signed integer
+          final sample = buffer[i] | (buffer[i + 1] << 8);
+          // Convert to signed value
+          final signed = sample > 32767 ? sample - 65536 : sample;
+          combinedAudio.add(signed);
+        }
+      }
+      
+      print('🎵 Combined ${_audioDataChunks.length} chunks into ${combinedAudio.length} samples');
+      
+      // Convert back to PCM bytes for WAV creation
+      final pcmBytes = <int>[];
+      for (final sample in combinedAudio) {
+        // Clamp to 16-bit range
+        final clampedSample = sample.clamp(-32768, 32767);
+        // Convert back to unsigned for WAV
+        final unsigned = clampedSample < 0 ? clampedSample + 65536 : clampedSample;
+        pcmBytes.add(unsigned & 0xFF);
+        pcmBytes.add((unsigned >> 8) & 0xFF);
+      }
+      
+      // Create WAV file
+      final wavBytes = _addWavHeader(pcmBytes, sampleRate: 24000);
+      
+      // Create temporary file and play
+      final tempDir = await getTemporaryDirectory();
+      final audioFile = File('${tempDir.path}/complete_response_${DateTime.now().millisecondsSinceEpoch}.wav');
+      await audioFile.writeAsBytes(wavBytes);
+      
+      print('🎵 Playing complete audio file with ${combinedAudio.length} samples');
+      
+      // Stop any currently playing audio
+      await _audioPlayer.stop();
+      
+      // Play the complete audio file
+      setState(() => _isPlayingAudio = true);
+      
+      try {
+        await _audioPlayer.play(DeviceFileSource(audioFile.path));
+        
+        // Set up completion listener
+        _audioPlayer.onPlayerComplete.first.then((_) async {
+          if (mounted) {
+            setState(() => _isPlayingAudio = false);
+          }
+          // Clean up
+          _audioDataChunks.clear();
+          if (await audioFile.exists()) {
+            await audioFile.delete();
+          }
+        });
+      } catch (playError) {
+        print('Error playing complete audio file: $playError');
+        if (mounted) {
+          setState(() => _isPlayingAudio = false);
+        }
+        // Clean up on error
+        _audioDataChunks.clear();
+        if (await audioFile.exists()) {
+          await audioFile.delete();
+        }
+      }
+      
+    } catch (e) {
+      print('Error playing accumulated audio: $e');
+      if (mounted) {
+        setState(() => _isPlayingAudio = false);
+      }
+      _audioDataChunks.clear();
+    }
+  }
+
+  /// Plays an audio chunk received from the API
+  Future<void> _playAudioChunk(String audioData) async {
+    try {
+      // Decode the base64 audio data
+      final audioBytes = base64Decode(audioData);
+      
+      // Create WAV header for PCM data (24kHz, 16-bit, mono)
+      final wavBytes = _addWavHeader(audioBytes, sampleRate: 24000);
+      
+      // Create a temporary file to store the audio
+      final tempDir = await getTemporaryDirectory();
+      final audioFile = File('${tempDir.path}/temp_response_${DateTime.now().millisecondsSinceEpoch}.wav');
+      await audioFile.writeAsBytes(wavBytes);
+      
+      // Play the audio file
+      setState(() => _isPlayingAudio = true);
+      
+      try {
+        await _audioPlayer.play(DeviceFileSource(audioFile.path));
+        
+        // Set up completion listener
+        _audioPlayer.onPlayerComplete.first.then((_) async {
+          if (mounted) {
+            setState(() => _isPlayingAudio = false);
+          }
+          // Clean up the temporary file
+          if (await audioFile.exists()) {
+            await audioFile.delete();
+          }
+        });
+      } catch (playError) {
+        print('Error playing audio file: $playError');
+        if (mounted) {
+          setState(() => _isPlayingAudio = false);
+        }
+        // Clean up the temporary file on error
+        if (await audioFile.exists()) {
+          await audioFile.delete();
+        }
+      }
+      
+    } catch (e) {
+      print('Error playing audio: $e');
+      if (mounted) {
+        setState(() => _isPlayingAudio = false);
+      }
+    }
+  }
+
+  /// Adds WAV header to raw PCM data
+  List<int> _addWavHeader(List<int> pcmData, {int sampleRate = 24000, int channels = 1, int bitsPerSample = 16}) {
+    final dataSize = pcmData.length;
+    final fileSize = dataSize + 36;
+    final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
+    final blockAlign = channels * (bitsPerSample ~/ 8);
+    
+    final header = <int>[
+      // RIFF header
+      82, 73, 70, 70, // "RIFF"
+      fileSize & 0xff, (fileSize >> 8) & 0xff, (fileSize >> 16) & 0xff, (fileSize >> 24) & 0xff,
+      87, 65, 86, 69, // "WAVE"
+      
+      // fmt subchunk
+      102, 109, 116, 32, // "fmt "
+      16, 0, 0, 0, // Subchunk1Size (16 for PCM)
+      1, 0, // AudioFormat (1 for PCM)
+      channels & 0xff, (channels >> 8) & 0xff, // NumChannels
+      sampleRate & 0xff, (sampleRate >> 8) & 0xff, (sampleRate >> 16) & 0xff, (sampleRate >> 24) & 0xff,
+      byteRate & 0xff, (byteRate >> 8) & 0xff, (byteRate >> 16) & 0xff, (byteRate >> 24) & 0xff,
+      blockAlign & 0xff, (blockAlign >> 8) & 0xff, // BlockAlign
+      bitsPerSample & 0xff, (bitsPerSample >> 8) & 0xff, // BitsPerSample
+      
+      // data subchunk
+      100, 97, 116, 97, // "data"
+      dataSize & 0xff, (dataSize >> 8) & 0xff, (dataSize >> 16) & 0xff, (dataSize >> 24) & 0xff,
+    ];
+    
+    return [...header, ...pcmData];
   }
 
   /// A helper function to add a new message to the list and update the UI.
@@ -476,11 +683,10 @@ class _ChatScreenState extends State<ChatPage> {
                 value: ResponseMode.text,
                 child: Text('Text Response'),
               ),
-              // Add this back if you implement audio response playback.
-              // const PopupMenuItem<ResponseMode>(
-              //   value: ResponseMode.audio,
-              //   child: Text('Audio Response'),
-              // ),
+              const PopupMenuItem<ResponseMode>(
+                value: ResponseMode.audio,
+                child: Text('Audio Response'),
+              ),
             ],
             icon: Icon(
               _responseMode == ResponseMode.text ? Icons.text_fields : Icons.graphic_eq,
@@ -526,6 +732,25 @@ class _ChatScreenState extends State<ChatPage> {
             ),
             // Show a progress bar while the model is replying.
             if (_isReplying) const LinearProgressIndicator(),
+            // Show audio playing indicator
+            if (_isPlayingAudio)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.volume_up, size: 16, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Playing audio response...',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const Divider(height: 1.0),
             // If disconnected, show a button to reconnect.
             if (_connectionStatus == ConnectionStatus.disconnected)
