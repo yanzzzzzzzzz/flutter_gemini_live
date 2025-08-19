@@ -70,6 +70,7 @@ class GenerationConfig {
   final double? topP;
   final int? maxOutputTokens;
   final List<Modality>? responseModalities;
+  final SpeechConfig? speechConfig;
 
   GenerationConfig({
     this.temperature,
@@ -77,6 +78,7 @@ class GenerationConfig {
     this.topP,
     this.maxOutputTokens,
     this.responseModalities,
+    this.speechConfig,
   });
 
   factory GenerationConfig.fromJson(Map<String, dynamic> json) =>
@@ -262,4 +264,46 @@ class Tool {
   factory Tool.fromJson(Map<String, dynamic> json) => _$ToolFromJson(json);
 
   Map<String, dynamic> toJson() => _$ToolToJson(this);
+}
+
+// Speech Configuration Classes
+@JsonSerializable(includeIfNull: false, fieldRename: FieldRename.snake)
+class SpeechConfig {
+  final VoiceConfig? voiceConfig;
+  final String? languageCode;
+
+  SpeechConfig({
+    this.voiceConfig,
+    this.languageCode,
+  });
+
+  factory SpeechConfig.fromJson(Map<String, dynamic> json) => _$SpeechConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$SpeechConfigToJson(this);
+}
+
+@JsonSerializable(includeIfNull: false, fieldRename: FieldRename.snake)
+class VoiceConfig {
+  final PrebuiltVoiceConfig? prebuiltVoiceConfig;
+
+  VoiceConfig({
+    this.prebuiltVoiceConfig,
+  });
+
+  factory VoiceConfig.fromJson(Map<String, dynamic> json) => _$VoiceConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$VoiceConfigToJson(this);
+}
+
+@JsonSerializable(includeIfNull: false, fieldRename: FieldRename.snake)
+class PrebuiltVoiceConfig {
+  final String? voiceName;
+
+  PrebuiltVoiceConfig({
+    this.voiceName,
+  });
+
+  factory PrebuiltVoiceConfig.fromJson(Map<String, dynamic> json) => _$PrebuiltVoiceConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$PrebuiltVoiceConfigToJson(this);
 }

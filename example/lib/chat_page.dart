@@ -115,7 +115,7 @@ class _ChatScreenState extends State<ChatPage> {
     });
 
     try {
-      final modelName =  'gemini-2.0-flash-live-001';
+      final modelName =  'gemini-live-2.5-flash-preview';
       print('🔧 Current response mode: ${_responseMode.name}');
       print('🔧 Response modalities will be: ${_responseMode == ResponseMode.audio ? "[AUDIO]" : "[TEXT]"}');
       
@@ -131,15 +131,21 @@ class _ChatScreenState extends State<ChatPage> {
             responseModalities: _responseMode == ResponseMode.audio
                 ? [Modality.AUDIO]
                 : [Modality.TEXT],
+            // Add speech configuration for audio responses
+            speechConfig: _responseMode == ResponseMode.audio ? SpeechConfig(
+              voiceConfig: VoiceConfig(
+                prebuiltVoiceConfig: PrebuiltVoiceConfig(
+                  voiceName: "Charon"
+                )
+              ),
+              languageCode: "cmn-CN"
+            ) : null,
           ),
           // Provide system instructions to guide the model's behavior.
           systemInstruction: Content(
             parts: [
               Part(
-                text: "You are a helpful AI assistant. "
-                    "Your goal is to provide comprehensive, detailed, and well-structured answers. Always explain the background, key concepts, and provide illustrative examples. Do not give short or brief answers."
-                    "**You must respond in the same language that the user uses for their question.** For example, if the user asks a question in Korean, you must reply in Korean. "
-                    "If they ask in Japanese, reply in Japanese.",
+                text: "You are a helpful AI assistant. ",
               ),
             ],
           ),
