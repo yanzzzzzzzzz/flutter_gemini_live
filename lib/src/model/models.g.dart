@@ -88,6 +88,16 @@ LiveClientSetup _$LiveClientSetupFromJson(Map<String, dynamic> json) =>
       tools: (json['tools'] as List<dynamic>?)
           ?.map((e) => Tool.fromJson(e as Map<String, dynamic>))
           .toList(),
+      inputAudioTranscription: json['input_audio_transcription'] == null
+          ? null
+          : AudioTranscriptionConfig.fromJson(
+              json['input_audio_transcription'] as Map<String, dynamic>,
+            ),
+      outputAudioTranscription: json['output_audio_transcription'] == null
+          ? null
+          : AudioTranscriptionConfig.fromJson(
+              json['output_audio_transcription'] as Map<String, dynamic>,
+            ),
     );
 
 Map<String, dynamic> _$LiveClientSetupToJson(LiveClientSetup instance) =>
@@ -96,6 +106,8 @@ Map<String, dynamic> _$LiveClientSetupToJson(LiveClientSetup instance) =>
       'generation_config': ?instance.generationConfig,
       'system_instruction': ?instance.systemInstruction,
       'tools': ?instance.tools,
+      'input_audio_transcription': ?instance.inputAudioTranscription,
+      'output_audio_transcription': ?instance.outputAudioTranscription,
     };
 
 LiveClientContent _$LiveClientContentFromJson(Map<String, dynamic> json) =>
@@ -233,6 +245,14 @@ VoiceConfig _$VoiceConfigFromJson(Map<String, dynamic> json) => VoiceConfig(
 
 Map<String, dynamic> _$VoiceConfigToJson(VoiceConfig instance) =>
     <String, dynamic>{'prebuilt_voice_config': ?instance.prebuiltVoiceConfig};
+
+AudioTranscriptionConfig _$AudioTranscriptionConfigFromJson(
+  Map<String, dynamic> json,
+) => AudioTranscriptionConfig();
+
+Map<String, dynamic> _$AudioTranscriptionConfigToJson(
+  AudioTranscriptionConfig instance,
+) => <String, dynamic>{};
 
 PrebuiltVoiceConfig _$PrebuiltVoiceConfigFromJson(Map<String, dynamic> json) =>
     PrebuiltVoiceConfig(voiceName: json['voice_name'] as String?);

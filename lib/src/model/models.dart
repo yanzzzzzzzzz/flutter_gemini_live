@@ -96,12 +96,16 @@ class LiveClientSetup {
   final GenerationConfig? generationConfig;
   final Content? systemInstruction;
   final List<Tool>? tools;
+  final AudioTranscriptionConfig? inputAudioTranscription;
+  final AudioTranscriptionConfig? outputAudioTranscription;
 
   LiveClientSetup({
     required this.model,
     this.generationConfig,
     this.systemInstruction,
     this.tools,
+    this.inputAudioTranscription,
+    this.outputAudioTranscription,
   });
 
   factory LiveClientSetup.fromJson(Map<String, dynamic> json) =>
@@ -293,6 +297,15 @@ class VoiceConfig {
   factory VoiceConfig.fromJson(Map<String, dynamic> json) => _$VoiceConfigFromJson(json);
 
   Map<String, dynamic> toJson() => _$VoiceConfigToJson(this);
+}
+
+@JsonSerializable(includeIfNull: false, fieldRename: FieldRename.snake)
+class AudioTranscriptionConfig {
+  AudioTranscriptionConfig();
+
+  factory AudioTranscriptionConfig.fromJson(Map<String, dynamic> json) => _$AudioTranscriptionConfigFromJson(json);
+
+  Map<String, dynamic> toJson() => _$AudioTranscriptionConfigToJson(this);
 }
 
 @JsonSerializable(includeIfNull: false, fieldRename: FieldRename.snake)

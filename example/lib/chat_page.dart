@@ -55,6 +55,11 @@ class _ChatScreenState extends State<ChatPage> {
   final AudioPlayer _audioPlayer = AudioPlayer(); // Audio player for playing responses.
   bool _isPlayingAudio = false; // Flag to track if audio is currently playing.
   bool _isAccumulatingAudio = false; // Flag to track if we're collecting audio chunks
+  // Buffer and debounce timer to merge fragmented transcription pieces
+  final StringBuffer _outputTranscriptionBuffer = StringBuffer();
+  Timer? _transcriptionFlushTimer;
+  // Track whether the last received fragment had finished=true
+  bool _lastTranscriptionFinished = false;
 
   /// Initializes the connection to the Gemini Live API when the widget is first created.
   Future<void> _initialize() async {
@@ -83,6 +88,7 @@ class _ChatScreenState extends State<ChatPage> {
     _audioStreamSubscription?.cancel(); // Cancel any active stream subscriptions.
     _audioRecorder.dispose(); // Dispose of the audio recorder.
     _audioPlayer.dispose(); // Dispose of the audio player.
+  _transcriptionFlushTimer?.cancel();
     _textController.dispose(); // Dispose of the text controller.
     super.dispose();
   }
@@ -141,6 +147,10 @@ class _ChatScreenState extends State<ChatPage> {
               languageCode: "cmn-CN"
             ) : null,
           ),
+          // Enable audio transcription for audio responses
+          outputAudioTranscription: _responseMode == ResponseMode.audio ? AudioTranscriptionConfig() : null,
+          // Optionally enable input audio transcription
+          inputAudioTranscription: AudioTranscriptionConfig(),
           // Provide system instructions to guide the model's behavior.
           systemInstruction: Content(
             parts: [
@@ -197,8 +207,14 @@ class _ChatScreenState extends State<ChatPage> {
     final textChunk = message.text;
     final audioChunk = message.audio;
     
+    // Check for audio transcription
+    final outputTranscription = message.serverContent?.outputTranscription;
+    final inputTranscription = message.serverContent?.inputTranscription;
+    
     print('📥 Received message textchunk: $textChunk');
     print('📥 Received message audiochunk: ${audioChunk != null ? "Audio data received" : "No audio"}');
+    print('📥 Output transcription: ${outputTranscription?.text}');
+    print('📥 Input transcription: ${inputTranscription?.text}');
     
     // Handle text response
     if (textChunk != null) {
@@ -216,13 +232,30 @@ class _ChatScreenState extends State<ChatPage> {
       });
     }
 
+    // Handle output transcription (model's speech converted to text)
+    if (outputTranscription?.text != null && _responseMode == ResponseMode.audio) {
+      final frag = outputTranscription!.text!;
+      final finished = outputTranscription.finished == true;
+      print('🎤 Received output transcription fragment: $frag (finished=$finished)');
+      // Buffer fragments and start/reset inactivity timer; only flush on sentence terminator
+      // or when server indicates final (and no further fragments arrive during timeout).
+      _appendOutputTranscriptionFragment(frag, finished: finished);
+    }
+
+    // Handle input transcription (user's speech converted to text) 
+    if (inputTranscription?.text != null) {
+      print('🎙️ Received input transcription: ${inputTranscription!.text}');
+      // You can choose to display this or not - it's the transcription of user's audio
+      // For now, we'll just log it, but you could add it to the UI if desired
+    }
+
     // Handle audio response
     if (audioChunk != null && _responseMode == ResponseMode.audio) {
       print('🎵 Processing audio chunk with length: ${audioChunk.length}');
       _accumulateAudioChunk(audioChunk);
       
-      // Add a message to show that audio is being processed
-      if (_streamingMessage == null && !_isAccumulatingAudio) {
+      // Add a message to show that audio is being processed (only if no transcription available)
+      if (_streamingMessage == null && !_isAccumulatingAudio && outputTranscription?.text == null) {
         setState(() {
           _streamingMessage = ChatMessage(text: "🔊 Processing audio response...", author: Role.model);
           _isAccumulatingAudio = true;
@@ -232,6 +265,10 @@ class _ChatScreenState extends State<ChatPage> {
 
     // When the model signals that its turn is complete, finalize the message.
     if (message.serverContent?.turnComplete ?? false) {
+      // Cancel any pending inactivity flush and flush transcription once here.
+      _transcriptionFlushTimer?.cancel();
+      _flushOutputTranscription(finished: true);
+
       setState(() {
         if (_streamingMessage != null) {
           // Move the completed streaming message into the main message list.
@@ -239,7 +276,7 @@ class _ChatScreenState extends State<ChatPage> {
           _streamingMessage = null; // Clear the streaming message.
         }
         _isReplying = false; // Allow the user to send another message.
-        
+
         // Play accumulated audio if any
         if (_audioDataChunks.isNotEmpty) {
           _playAccumulatedAudio();
@@ -259,6 +296,72 @@ class _ChatScreenState extends State<ChatPage> {
       print('Error accumulating audio chunk: $e');
     }
   }
+
+  // --- Transcription buffering helpers ---
+  void _appendOutputTranscriptionFragment(String fragment, {bool finished = false}) {
+    // Append fragment
+    _outputTranscriptionBuffer.write(fragment);
+    // Reset inactivity timer
+    _transcriptionFlushTimer?.cancel();
+    _lastTranscriptionFinished = finished;
+    // Wait a short period of inactivity before flushing. This avoids emitting many tiny messages.
+    _transcriptionFlushTimer = Timer(const Duration(milliseconds: 600), () {
+      _flushOutputTranscription(finished: _lastTranscriptionFinished);
+    });
+  }
+
+  void _flushOutputTranscription({bool finished = false}) {
+    final buf = _outputTranscriptionBuffer.toString();
+    if (buf.isEmpty && !finished) return;
+
+    // Regex to find complete sentences (English and common CJK sentence enders)
+    final sentenceReg = RegExp(r'(.+?[。？！.!?])', multiLine: true, dotAll: true);
+    final matches = sentenceReg.allMatches(buf).toList();
+
+    // If there are complete sentences, extract and emit them as one consolidated message.
+    if (matches.isNotEmpty) {
+      final List<String> sentences = matches.map((m) => m.group(1)!.trim()).toList();
+      final lastEnd = matches.last.end;
+      final remainder = buf.substring(lastEnd);
+
+      // update buffer to keep remainder (incomplete sentence)
+      _outputTranscriptionBuffer.clear();
+      if (remainder.isNotEmpty) _outputTranscriptionBuffer.write(remainder);
+
+      final combined = sentences.join(' ');
+      _emitTranscriptionMessage(combined);
+      return;
+    }
+
+    // If server signalled finished and no sentence terminator found, flush whatever remains once.
+    if (finished) {
+      final remaining = buf.trim();
+      if (remaining.isNotEmpty) {
+        _emitTranscriptionMessage(remaining);
+      }
+      _clearTranscriptionBuffer();
+      return;
+    }
+
+    // Otherwise, do not show interim fragments; wait for more text or finalization.
+  }
+
+  // Emit a single transcription message and clear any interim streaming message.
+  void _emitTranscriptionMessage(String text) {
+    if (!mounted) return;
+    setState(() {
+      _streamingMessage = null;
+      _messages.add(ChatMessage(text: text, author: Role.model));
+    });
+  }
+
+  // Clear buffer and reset transcription state.
+  void _clearTranscriptionBuffer() {
+    _outputTranscriptionBuffer.clear();
+    _lastTranscriptionFinished = false;
+    _transcriptionFlushTimer?.cancel();
+  }
+
 
   /// Plays all accumulated audio chunks as one continuous stream (JS-inspired implementation)
   Future<void> _playAccumulatedAudio() async {
